@@ -31,7 +31,9 @@ android {
 dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
-    // Offline speech recognition (Vosk), latest: 0.3.75
-    implementation 'com.alphacephei:vosk-android:0.3.75'
+    // Offline speech recognition (Vosk)
+    implementation('com.alphacephei:vosk-android:0.3.75') {
+        exclude group: 'net.java.dev.jna', module: 'jna'
+    }
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
 }
