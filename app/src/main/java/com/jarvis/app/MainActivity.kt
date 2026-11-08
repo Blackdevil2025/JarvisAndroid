@@ -1,14 +1,25 @@
 package com.jarvis.app
 
+import android.animation.ValueAnimator
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.view.View
 import android.widget.Button
+import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
@@ -30,13 +41,30 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
     private lateinit var statusText: TextView
     private lateinit var resultText: TextView
+    private lateinit var logText: TextView
     private lateinit var micButton: Button
+    private lateinit var progressBar: ProgressBar
+    private lateinit var ring1: View
+    private lateinit var ring2: View
+    private lateinit var inputText: EditText
+    private lateinit var sendButton: Button
+    private lateinit var bgSwitch: SwitchCompat
 
-    // Downloaded once on first launch, then the app works 100% offline
-    private val modelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+    private val animators = mutableListOf<ValueAnimator>()
+    private val chatHistory = mutableListOf<Pair<String, String>>()
+    private var autoStartOnReady = false
+
+    private val prefs by lazy { getSharedPreferences("jarvis", MODE_PRIVATE) }
+
+    // --- voice model (small by default; "upgrade model" for quiet speech) ---
     private val modelDir get() = File(filesDir, "model")
     private val zipFile get() = File(filesDir, "model.zip")
-    private val tmpDirName = "vosk-model-small-en-us-0.15"
+    private val useBigModel get() = prefs.getBoolean("big_model", false)
+    private val modelUrl get() = if (useBigModel)
+        "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip"
+    else
+        "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+    private val tmpDirName get() = if (useBigModel) "vosk-model-en-us-0.22" else "vosk-model-small-en-us-0.15"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,44 +72,146 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
         statusText = findViewById(R.id.statusText)
         resultText = findViewById(R.id.resultText)
+        logText = findViewById(R.id.logText)
         micButton = findViewById(R.id.micButton)
+        progressBar = findViewById(R.id.progressBar)
+        ring1 = findViewById(R.id.ring1)
+        ring2 = findViewById(R.id.ring2)
+        inputText = findViewById(R.id.inputText)
+        sendButton = findViewById(R.id.sendButton)
+        bgSwitch = findViewById(R.id.bgSwitch)
 
         actions = Actions(this)
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) tts.language = Locale.getDefault()
+        tts = TextToSpeech(this) { s -> if (s == TextToSpeech.SUCCESS) tts.language = Locale.getDefault() }
+
+        styleRings()
+        startPulse()
+
+        log("SYS ▸", "J.A.R.V.I.S. OS v3.0 — best friend protocol loaded")
+        log("SYS ▸", "Chat with me by voice or by typing below.")
+        log("SYS ▸", "Background listener: toggle ON, then say \"Jarvis\" from anywhere.")
+        log("SYS ▸", "Soft voice? Say: upgrade model")
+
+        bgSwitch.isChecked = prefs.getBoolean("bg_listener", false)
+        bgSwitch.setOnCheckedChangeListener { _, isChecked -> setBackgroundListener(isChecked) }
+
+        sendButton.setOnClickListener {
+            val t = inputText.text.toString().trim()
+            if (t.isNotBlank()) {
+                inputText.setText("")
+                handleCommand(t)
+            }
         }
 
         checkPermissions()
         initModel()
 
-        micButton.setOnClickListener {
-            if (listening) stopListening() else startListening()
+        micButton.setOnClickListener { if (listening) stopListening() else startListening() }
+
+        if (intent.getBooleanExtra("wake", false)) tryAutoStart()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("wake", false)) tryAutoStart()
+    }
+
+    private fun tryAutoStart() {
+        if (model != null) startListening() else autoStartOnReady = true
+    }
+
+    // ------------------------------------------------------------ UI helpers
+    private fun setStatus(s: String) = runOnUiThread { statusText.text = s }
+
+    private fun log(tag: String, msg: String) {
+        runOnUiThread { logText.append("$tag $msg\n") }
+    }
+
+    private fun say(reply: String) {
+        log("JARVIS ▸", reply)
+        tts.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "jarvis")
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun ringDrawable() = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(Color.TRANSPARENT)
+        setStroke(dp(2), Color.parseColor("#40E0F7FF"))
+    }
+
+    private fun styleRings() {
+        ring1.background = ringDrawable()
+        ring2.background = ringDrawable()
+    }
+
+    private fun startPulse() {
+        fun pulse(v: View, delay: Long) {
+            val va = ValueAnimator.ofFloat(1f, 1.45f)
+            va.duration = 1500
+            va.repeatCount = ValueAnimator.INFINITE
+            va.repeatMode = ValueAnimator.REVERSE
+            va.startDelay = delay
+            va.addUpdateListener {
+                val f = it.animatedValue as Float
+                v.scaleX = f; v.scaleY = f
+                v.alpha = (1.85f - f).coerceIn(0.08f, 1f)
+            }
+            va.start()
+            animators.add(va)
+        }
+        pulse(ring1, 0L)
+        pulse(ring2, 750L)
+    }
+
+    // ------------------------------------------------------------ background listener
+    private fun setBackgroundListener(on: Boolean) {
+        prefs.edit().putBoolean("bg_listener", on).apply()
+        if (on) {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Allow 'display over other apps' for Jarvis, then toggle again", Toast.LENGTH_LONG).show()
+                bgSwitch.isChecked = false
+                prefs.edit().putBoolean("bg_listener", false).apply()
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                return
+            }
+            ContextCompat.startForegroundService(this, Intent(this, JarvisService::class.java))
+            Toast.makeText(this, "Background listener on — say \"Jarvis\"", Toast.LENGTH_SHORT).show()
+        } else {
+            startService(Intent(this, JarvisService::class.java).setAction(JarvisService.ACTION_STOP))
         }
     }
 
     // ------------------------------------------------------------ model setup
     private fun initModel() {
-        statusText.text = "Loading speech model…"
+        setStatus("LOADING NEURAL CORE…")
+        progressBar.visibility = View.VISIBLE
         Thread {
             try {
                 if (!File(modelDir, "am/final.mdl").exists()) {
-                    updateStatus("First run: downloading voice model (~40 MB)…\nWi-Fi recommended. One-time only.")
+                    setStatus("FIRST RUN: DOWNLOADING VOICE MODEL…")
                     downloadModel()
+                    setStatus("UNPACKING MODEL…")
                     unpackModel()
-                    updateStatus("Unpacking model…")
                 }
                 val m = Model(modelDir.absolutePath)
                 runOnUiThread {
                     model = m
-                    statusText.text = "Ready. Tap the mic."
+                    progressBar.visibility = View.GONE
+                    setStatus("READY  •  TAP THE CORE OR TYPE BELOW")
+                    if (autoStartOnReady) {
+                        autoStartOnReady = false
+                        startListening()
+                    }
                 }
             } catch (e: Exception) {
-                updateStatus("Model error: ${e.message}\nCheck your connection and restart the app.")
+                runOnUiThread {
+                    progressBar.visibility = View.GONE
+                    setStatus("MODEL ERROR: ${e.message} — CHECK CONNECTION & RESTART")
+                }
             }
         }.start()
     }
-
-    private fun updateStatus(s: String) = runOnUiThread { statusText.text = s }
 
     private fun downloadModel() {
         val conn = URL(modelUrl).openConnection() as HttpURLConnection
@@ -112,30 +242,44 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         zipFile.delete()
     }
 
+    private fun upgradeModel() {
+        prefs.edit().putBoolean("big_model", true).apply()
+        speechService?.stop()
+        speechService?.shutdown()
+        speechService = null
+        model?.close()
+        model = null
+        modelDir.deleteRecursively()
+        zipFile.delete()
+        say("Upgrading to the large neural model. One point eight gigabytes — keep the app open on Wi-Fi. I will hear whispers after this.")
+        initModel()
+    }
+
+    // ------------------------------------------------------------ listening
     private fun startListening() {
-        val m = model ?: return
+        val m = model ?: run {
+            Toast.makeText(this, "Model not ready yet…", Toast.LENGTH_SHORT).show()
+            return
+        }
         speechService?.stop()
         speechService?.shutdown()
         speechService = SpeechService(Recognizer(m, 16000.0f), 16000.0f)
         speechService!!.startListening(this)
         listening = true
-        statusText.text = "Listening…"
+        setStatus("LISTENING…")
         micButton.text = "STOP"
     }
 
     private fun stopListening() {
         speechService?.stop()
         listening = false
-        statusText.text = "Stopped."
+        setStatus("READY  •  TAP THE CORE OR TYPE BELOW")
         micButton.text = "MIC"
     }
 
     // ------------------------------------------------------------ Vosk callbacks
     override fun onPartialResult(hypothesis: String?) {
-        hypothesis?.let {
-            val t = JSONObject(it).optString("partial", "")
-            resultText.text = t
-        }
+        hypothesis?.let { resultText.text = JSONObject(it).optString("partial", "") }
     }
 
     override fun onResult(hypothesis: String?) {
@@ -143,17 +287,45 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             val t = JSONObject(it).optString("text", "")
             if (t.isNotBlank()) handleCommand(t)
         }
-        if (listening) speechService?.startListening(this)   // keep listening continuously
+        if (listening) speechService?.startListening(this)
     }
 
+    override fun onFinalResult(hypothesis: String?) {}
+
+    override fun onError(e: Exception?) {
+        setStatus("ERROR: ${e?.message}")
+    }
+
+    override fun onTimeout() {
+        if (listening) speechService?.startListening(this)
+    }
+
+    // ------------------------------------------------------------ command + friend brain
     private fun handleCommand(text: String) {
         resultText.text = "» $text"
-        val reply = actions.execute(CommandEngine.parse(text))
-        speak(reply)
-    }
+        log("YOU ▸", text)
 
-    private fun speak(text: String) {
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jarvis")
+        val command = CommandEngine.parse(text)
+        if (command.name == "upgrade_model") {
+            upgradeModel()
+            return
+        }
+        if (command.name != "unknown") {
+            say(actions.execute(command))
+            return
+        }
+
+        // unknown -> best friend brain (keyless: free online AI if net exists, offline personality otherwise)
+        setStatus("THINKING…")
+        Brain.think(this, chatHistory, text) { reply ->
+            runOnUiThread {
+                setStatus(if (listening) "LISTENING…" else "READY  •  TAP THE CORE OR TYPE BELOW")
+                chatHistory.add("user" to text)
+                chatHistory.add("model" to reply)
+                while (chatHistory.size > 12) chatHistory.removeAt(0)
+                say(reply)
+            }
+        }
     }
 
     // ------------------------------------------------------------ permissions
@@ -163,7 +335,8 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             Manifest.permission.CALL_PHONE,
             Manifest.permission.SEND_SMS,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.CAMERA
+            Manifest.permission.CAMERA,
+            Manifest.permission.POST_NOTIFICATIONS
         )
         val missing = needed.filter {
             ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -172,16 +345,9 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1)
     }
 
-    override fun onFinalResult(hypothesis: String?) {}
-    override fun onError(e: Exception?) {
-        statusText.text = "Error: ${e?.message}"
-    }
-    override fun onTimeout() {
-        if (listening) speechService?.startListening(this)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
+        animators.forEach { it.cancel() }
         speechService?.stop()
         speechService?.shutdown()
         model?.close()
