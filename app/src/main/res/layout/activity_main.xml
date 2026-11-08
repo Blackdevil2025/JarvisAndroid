@@ -3,34 +3,134 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp"
-    android:background="#0D1117">
+    android:padding="20dp"
+    android:background="#04070F">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="J . A . R . V . I . S ."
+        android:textColor="#00E5FF"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.2" />
 
     <TextView
         android:id="@+id/statusText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Tap the mic to start"
-        android:textColor="#58A6FF"
-        android:textSize="18sp"
-        android:layout_marginBottom="32dp" />
+        android:layout_gravity="center"
+        android:layout_marginTop="6dp"
+        android:text="INITIALIZING"
+        android:textColor="#4DD0E1"
+        android:textSize="13sp"
+        android:letterSpacing="0.15" />
 
-    <Button
-        android:id="@+id/micButton"
-        android:layout_width="140dp"
-        android:layout_height="140dp"
-        android:text="MIC"
-        android:textSize="20sp"
-        android:backgroundTint="#1F6FEB" />
+    <FrameLayout
+        android:layout_width="230dp"
+        android:layout_height="230dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="12dp">
+
+        <View
+            android:id="@+id/ring1"
+            android:layout_width="230dp"
+            android:layout_height="230dp"
+            android:layout_gravity="center" />
+
+        <View
+            android:id="@+id/ring2"
+            android:layout_width="164dp"
+            android:layout_height="164dp"
+            android:layout_gravity="center" />
+
+        <Button
+            android:id="@+id/micButton"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_gravity="center"
+            android:text="MIC"
+            android:textStyle="bold"
+            android:textColor="#02131A"
+            android:textSize="18sp"
+            android:backgroundTint="#00E5FF" />
+    </FrameLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/resultText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="4dp"
         android:text=""
-        android:textColor="#C9D1D9"
-        android:textSize="16sp"
-        android:layout_marginTop="32dp"
-        android:textAlignment="center" />
+        android:textColor="#8FA3BF"
+        android:textSize="14sp" />
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/bgSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="6dp"
+        android:text="Background listener — say \"Jarvis\" anywhere"
+        android:textColor="#4DD0E1"
+        android:textSize="13sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:background="#0A1220"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/logText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#7EE787"
+            android:textSize="13sp"
+            android:fontFamily="monospace" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp">
+
+        <EditText
+            android:id="@+id/inputText"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="#0A1220"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:hint="Type to Jarvis…"
+            android:textColorHint="#55677F"
+            android:textColor="#C9D1D9"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/sendButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:text="SEND"
+            android:textStyle="bold"
+            android:textColor="#02131A"
+            android:backgroundTint="#00E5FF" />
+    </LinearLayout>
 </LinearLayout>
