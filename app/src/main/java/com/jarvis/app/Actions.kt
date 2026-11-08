@@ -16,7 +16,8 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Executes parsed commands using Android APIs. Everything here runs 100% offline.
+ * Executes parsed commands using Android APIs.
+ * Device tasks work offline; YouTube needs internet (handled with fallbacks).
  */
 class Actions(private val activity: Activity) {
 
@@ -28,6 +29,7 @@ class Actions(private val activity: Activity) {
             "sms"         -> sendSms(cmd.args["target"] ?: "", cmd.args["message"] ?: "")
             "alarm"       -> setAlarm(cmd.args["time"] ?: "")
             "open_app"    -> openApp(cmd.args["app"] ?: "")
+            "youtube"     -> youtube(cmd.args["query"] ?: "")
             "flashlight"  -> flashlight(cmd.args["state"] == "on")
             "time"        -> SimpleDateFormat("h:mm a", Locale.getDefault()).format(Calendar.getInstance().time)
             "date"        -> SimpleDateFormat("EEEE, MMMM d yyyy", Locale.getDefault()).format(Calendar.getInstance().time)
@@ -35,9 +37,8 @@ class Actions(private val activity: Activity) {
             "find_contact"-> findContact(cmd.args["name"] ?: "")
             "note_add"    -> addNote(cmd.args["note"] ?: "")
             "note_read"   -> readNotes()
-            "identity"    -> "I am Jarvis, your offline assistant."
-            "greeting"    -> "Running at full capacity, thank you."
-            "needs_internet" -> "That requires an internet connection, and I work fully offline."
+            "identity"    -> "I am Jarvis. Offline body, online brain. At your service."
+            "greeting"    -> "All systems at full capacity, thank you."
             else          -> "Sorry, I did not understand that command."
         }.also { reply ->
             activity.runOnUiThread { Toast.makeText(activity, reply, Toast.LENGTH_LONG).show() }
@@ -103,6 +104,32 @@ class Actions(private val activity: Activity) {
             }
         }
         return "I could not find an app named $name."
+    }
+
+    // ------------------------------------------------------------------ YouTube
+    private fun youtube(query: String): String {
+        if (query.isBlank()) return openApp("youtube")
+        // Voice-search intent: the YouTube app auto-plays the top result
+        try {
+            val play = Intent("android.media.action.MEDIA_PLAY_FROM_SEARCH")
+                .setPackage("com.google.android.youtube")
+                .putExtra("query", query)
+                .putExtra("android.intent.extra.focus", "vnd.android.cursor.item/*")
+            activity.startActivity(play)
+            return "Playing $query on YouTube."
+        } catch (e: Exception) {
+            val url = "https://www.youtube.com/results?search_query=" + Uri.encode(query)
+            try {
+                activity.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        .setPackage("com.google.android.youtube")
+                )
+                return "Opening YouTube for $query."
+            } catch (e2: Exception) {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                return "Opening YouTube in the browser for $query."
+            }
+        }
     }
 
     // ------------------------------------------------------------------ flashlight
