@@ -2,8 +2,7 @@ package com.jarvis.app
 
 /**
  * Rule-based offline natural language -> command parser.
- * Parses raw speech text into a structured Command object.
- * Extend this file to add new capabilities.
+ * Anything it cannot map becomes a chat for the online brain.
  */
 data class Command(val name: String, val args: Map<String, String> = emptyMap())
 
@@ -40,6 +39,14 @@ object CommandEngine {
             ))
         }
 
+        // --- YouTube (internet) ----------------------------------------------
+        Regex("^(?:open )?youtube(?: and)?(?: play)?(?: (.+))?$").find(text)?.let {
+            return Command("youtube", mapOf("query" to it.groupValues[1]))
+        }
+        Regex("^play (.+?) on youtube$").find(text)?.let {
+            return Command("youtube", mapOf("query" to it.groupValues[1]))
+        }
+
         // --- Open an app ---------------------------------------------------
         Regex("^(?:open|launch|start) (.+)$").find(text)?.let {
             return Command("open_app", mapOf("app" to it.groupValues[1]))
@@ -72,16 +79,17 @@ object CommandEngine {
         if (Regex("read (my )?notes|read (my )?note").containsMatchIn(text))
             return Command("note_read")
 
+        // --- Model upgrade (quiet speech) --------------------------------------
+        if (Regex("upgrade (the )?model|use (the )?big (model|brain)|improve (my )?hearing").containsMatchIn(text))
+            return Command("upgrade_model")
+
         // --- Small talk / identity ----------------------------------------------
         if (Regex("who are you|your name|introduce yourself").containsMatchIn(text))
             return Command("identity")
         if (Regex("how are you|how('s| is) it going").containsMatchIn(text))
             return Command("greeting")
 
-        // --- Fallback: needs internet things -------------------------------------
-        if (Regex("weather|news|search the web|google|youtube").containsMatchIn(text))
-            return Command("needs_internet")
-
+        // --- Fallback -> chat brain ----------------------------------------------
         return Command("unknown")
     }
 }
