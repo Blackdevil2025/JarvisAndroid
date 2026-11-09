@@ -82,7 +82,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:layout_marginTop="6dp"
-        android:text="Background listener — say \"Jarvis\" anywhere"
+        android:text="Background listener — say &quot;Jarvis&quot; anywhere"
         android:textColor="#4DD0E1"
         android:textSize="13sp" />
 
@@ -118,7 +118,7 @@
             android:background="#0A1220"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:hint="Type to Jarvis…"
+            android:hint="Type to Jarvis..."
             android:textColorHint="#55677F"
             android:textColor="#C9D1D9"
             android:textSize="15sp" />
