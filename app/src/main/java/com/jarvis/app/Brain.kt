@@ -314,7 +314,3 @@ object Brain {
         }
     }
 }
-               ).random()
-        }
-    }
-}
