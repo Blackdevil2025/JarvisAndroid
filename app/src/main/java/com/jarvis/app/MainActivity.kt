@@ -87,10 +87,10 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         styleRings()
         startPulse()
 
-        log("SYS ▸", "J.A.R.V.I.S. OS v3.0 — best friend protocol loaded")
+        log("SYS ▸", "J.A.R.V.I.S. OS v3.1 — birthday protocol online")
         log("SYS ▸", "Chat with me by voice or by typing below.")
         log("SYS ▸", "Background listener: toggle ON, then say \"Jarvis\" from anywhere.")
-        log("SYS ▸", "Soft voice? Say: upgrade model")
+        log("SYS ▸", "Soft voice? Say: upgrade model — download now resumes if interrupted")
 
         bgSwitch.isChecked = prefs.getBoolean("bg_listener", false)
         bgSwitch.setOnCheckedChangeListener { _, isChecked -> setBackgroundListener(isChecked) }
@@ -186,13 +186,19 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
     private fun initModel() {
         setStatus("LOADING NEURAL CORE…")
         progressBar.visibility = View.VISIBLE
+        progressBar.isIndeterminate = true
         Thread {
             try {
                 if (!File(modelDir, "am/final.mdl").exists()) {
-                    setStatus("FIRST RUN: DOWNLOADING VOICE MODEL…")
                     downloadModel()
                     setStatus("UNPACKING MODEL…")
-                    unpackModel()
+                    progressBar.isIndeterminate = true
+                    try {
+                        unpackModel()
+                    } catch (e: Exception) {
+                        zipFile.delete()
+                        throw e
+                    }
                 }
                 val m = Model(modelDir.absolutePath)
                 runOnUiThread {
@@ -207,17 +213,61 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             } catch (e: Exception) {
                 runOnUiThread {
                     progressBar.visibility = View.GONE
-                    setStatus("MODEL ERROR: ${e.message} — CHECK CONNECTION & RESTART")
+                    setStatus("MODEL ERROR: ${e.message} — RESTART APP, DOWNLOAD RESUMES WHERE IT STOPPED")
                 }
             }
         }.start()
     }
 
+    /** Resumable, retrying download with live percentage. Safe for flaky Wi-Fi. */
     private fun downloadModel() {
-        val conn = URL(modelUrl).openConnection() as HttpURLConnection
-        conn.inputStream.use { input ->
-            zipFile.outputStream().use { output -> input.copyTo(output) }
+        var attempt = 0
+        while (attempt < 10) {
+            attempt++
+            try {
+                val existing = zipFile.length()
+                val conn = URL(modelUrl).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 120000
+                if (existing > 0) conn.setRequestProperty("Range", "bytes=$existing-")
+                val code = conn.responseCode
+                if (code == 416) return // file already complete
+                if (code != 200 && code != 206) throw Exception("HTTP $code")
+                val append = code == 206
+                if (!append && existing > 0) zipFile.delete()
+                val totalExpected = existing + conn.contentLengthLong
+                var received = if (append) existing else 0L
+                progressBar.isIndeterminate = false
+                progressBar.max = 1000
+                conn.inputStream.use { input ->
+                    zipFile.outputStream(append).use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var lastPct = -1
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            output.write(buf, 0, n)
+                            received += n
+                            if (totalExpected > 0) {
+                                val pct = ((received * 100) / totalExpected).toInt()
+                                if (pct != lastPct) {
+                                    lastPct = pct
+                                    progressBar.progress = ((received * 1000) / totalExpected).toInt()
+                                    setStatus("DOWNLOADING VOICE MODEL… $pct%")
+                                }
+                            }
+                        }
+                    }
+                }
+                conn.disconnect()
+                if (zipFile.length() > 0) return
+            } catch (e: Exception) {
+                progressBar.isIndeterminate = true
+                setStatus("CONNECTION HICCUP — RESUMING… ($attempt/10)")
+                Thread.sleep(2500)
+            }
         }
+        throw Exception("download kept failing — connect to stronger Wi-Fi and restart")
     }
 
     private fun unpackModel() {
@@ -251,7 +301,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         model = null
         modelDir.deleteRecursively()
         zipFile.delete()
-        say("Upgrading to the large neural model. One point eight gigabytes — keep the app open on Wi-Fi. I will hear whispers after this.")
+        say("Upgrading to the large neural model. One point eight gigabytes — it resumes automatically if the connection drops. I will hear whispers after this.")
         initModel()
     }
 
@@ -315,7 +365,6 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             return
         }
 
-        // unknown -> best friend brain (keyless: free online AI if net exists, offline personality otherwise)
         setStatus("THINKING…")
         Brain.think(this, chatHistory, text) { reply ->
             runOnUiThread {
