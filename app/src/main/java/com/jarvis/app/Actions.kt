@@ -96,11 +96,30 @@ class Actions(private val activity: Activity) {
         val pm = activity.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val matches = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        // pass 1: exact label ("open google" must hit "google", not "google tv")
         for (ri in matches) {
             val label = ri.loadLabel(pm).toString().lowercase()
-            if (label.contains(name)) {
+            if (label == name) {
                 activity.startActivity(pm.getLaunchIntentForPackage(ri.activityInfo.packageName))
                 return "Opening $label."
+            }
+        }
+        // pass 2: label starts with the name
+        for (ri in matches) {
+            val label = ri.loadLabel(pm).toString().lowercase()
+            if (label.startsWith(name)) {
+                activity.startActivity(pm.getLaunchIntentForPackage(ri.activityInfo.packageName))
+                return "Opening $label."
+            }
+        }
+        // pass 3: contains, only for reasonably specific names
+        if (name.length >= 4) {
+            for (ri in matches) {
+                val label = ri.loadLabel(pm).toString().lowercase()
+                if (label.contains(name)) {
+                    activity.startActivity(pm.getLaunchIntentForPackage(ri.activityInfo.packageName))
+                    return "Opening $label."
+                }
             }
         }
         return "I could not find an app named $name."
