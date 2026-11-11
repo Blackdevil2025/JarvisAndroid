@@ -58,7 +58,7 @@ class JarvisService : Service(), RecognitionListener {
     companion object {
         const val CHANNEL = "jarvis_bg"
         const val ACTION_STOP = "jarvis.action.STOP"
-        const val WAKE_GRAMMAR = "[\"jarvis\",\"hey jarvis\",\"jarvis wake up\",\"wake up\"]"
+        const val WAKE_GRAMMAR = "[\"jarvis\",\"hey jarvis\",\"jarvis wake up\",\"wake up jarvis\",\"wake up\"]"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
