@@ -240,7 +240,8 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                 progressBar.isIndeterminate = false
                 progressBar.max = 1000
                 conn.inputStream.use { input ->
-                    zipFile.outputStream(append).use { output ->
+                    java.io.FileOutputStream(zipFile, append).use { output ->
+
                         val buf = ByteArray(64 * 1024)
                         var lastPct = -1
                         while (true) {
